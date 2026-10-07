@@ -1,0 +1,14 @@
+Financial Monitoring Android 1.0.0
+
+Validated in this build environment:
+- JavaScript syntax: PASS
+- Browser-flow integration test using the browser-preview mock database: PASS
+- Paid -> partial payment reversal test: PASS
+- Payday + freelance + receivable + overview totals flow: PASS
+- Mobile responsive navigation test: PASS
+- Java source type/syntax check against Android/API stubs: PASS
+
+Not executable in this environment:
+- Full Android Gradle/APK compilation (Android SDK/build-tools are not installed here).
+
+A GitHub Actions build workflow is included for a real Android SDK compile.

@@ -29,6 +29,15 @@ function yearOf(date) { return Number(String(date || '').slice(0, 4)); }
 function isOverdue(date, remaining) { return !!date && remaining > 0 && date < localDateKey(); }
 function isPaydayReceived(paycard) { return !!paycard?.paydayDate && paycard.paydayDate <= localDateKey(); }
 function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => toastEl.hidden = true, 2200); }
+window.exportDatabaseBackup = () => {
+  if (typeof Android !== 'undefined' && Android.exportDatabase) Android.exportDatabase();
+  else toast('Database backup is available in the Android app');
+};
+window.importDatabaseBackup = () => {
+  if (!confirm('Importing a database backup will replace the data currently stored in this app. Continue?')) return;
+  if (typeof Android !== 'undefined' && Android.importDatabase) Android.importDatabase();
+  else toast('Database restore is available in the Android app');
+};
 
 function expenseStatus(amountDue, amountPaid) {
   const due = n(amountDue), paid = n(amountPaid);
@@ -134,16 +143,15 @@ function makeMock() {
     deleteReceivable(id) { const x = byId(s.receivables, id); if (!x) return false; hist('receivable', id, 'deleted', 'Money owed to me entry deleted', x); removeMoves(m => m.parentType === 'receivable' && Number(m.parentId) === Number(id)); s.receivables = s.receivables.filter(x => x.id != id); save(); return true; },
     createGeneralExpense(o) {
       const id = next(s.generalExpenses); const x = { ...o, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-      s.generalExpenses.push(x); move('general_expense', 'general_expense', id, 'general_expense', id, -n(o.amount), `General expense: ${o.name}`);
-      const m = s.movements[0]; if (m) m.movementDate = o.expenseDate || localDateKey();
+      s.generalExpenses.push(x);
+      if (n(o.amount) > 0) { move('general_expense', 'general_expense', id, 'general_expense', id, -n(o.amount), `General expense: ${o.name}`); const m = s.movements[0]; if (m) m.movementDate = o.expenseDate || localDateKey(); }
       hist('general_expense', id, 'created', 'General expense created', x); save(); return id;
     },
     updateGeneralExpense(id, o) {
       const i = s.generalExpenses.findIndex(x => x.id == id); if (i < 0) return false;
       const before = JSON.parse(JSON.stringify(s.generalExpenses[i])); s.generalExpenses[i] = { ...before, ...o, updatedAt: new Date().toISOString() };
       removeMoves(m => m.sourceType === 'general_expense' && Number(m.sourceId) === Number(id));
-      move('general_expense', 'general_expense', id, 'general_expense', id, -n(o.amount), `General expense: ${o.name}`);
-      const m = s.movements[0]; if (m) m.movementDate = o.expenseDate || localDateKey();
+      if (n(o.amount) > 0) { move('general_expense', 'general_expense', id, 'general_expense', id, -n(o.amount), `General expense: ${o.name}`); const m = s.movements[0]; if (m) m.movementDate = o.expenseDate || localDateKey(); }
       hist('general_expense', id, 'edited', 'General expense edited', { before, after: s.generalExpenses[i] }); save(); return true;
     },
     deleteGeneralExpense(id) {
@@ -250,6 +258,7 @@ function renderOverview() {
       <article class="summary-card"><span>Money owed to you</span><strong>${money(currentOutstandingReceivables())}</strong><small>Not counted until received</small></article>
       <article class="summary-card"><span>History entries</span><strong>${snapshot.history.length}</strong><small>Tracked changes</small></article>
     </section>
+    <section class="panel"><div class="section-head"><div><div class="eyebrow">DATA SAFETY</div><h2>Database Backup</h2><div class="muted small">Export a local database backup before major app updates. Import replaces the app's current local data with the selected backup.</div></div></div><div class="card-actions"><button class="button secondary" onclick="exportDatabaseBackup()">Export Backup</button><button class="button secondary" onclick="importDatabaseBackup()">Import Backup</button></div></section>
     <section class="panel"><div class="filter-row"><label class="field"><span>Month</span><input id="overviewMonth" type="month" value="${h(overviewMonth)}"></label><button class="button secondary" onclick="applyOverviewMonth()">View month</button><label class="field"><span>Year</span><input id="overviewYear" type="number" min="2000" max="2100" value="${overviewYear}"></label><button class="button secondary" onclick="applyOverviewYear()">View year</button></div></section>
     <div class="section-head"><div><div class="eyebrow">MONTHLY</div><h2>${h(monthLabel(overviewMonth))}</h2></div></div>
     <section class="summary-grid six">

@@ -23,4 +23,8 @@ public class FinanceBridge {
     @JavascriptInterface public long createReceivable(String json) { return db.createReceivable(json); }
     @JavascriptInterface public boolean updateReceivable(long id, String json) { return db.updateReceivable(id, json); }
     @JavascriptInterface public boolean deleteReceivable(long id) { return db.deleteReceivable(id); }
+
+    @JavascriptInterface public long createGeneralExpense(String json) { return db.createGeneralExpense(json); }
+    @JavascriptInterface public boolean updateGeneralExpense(long id, String json) { return db.updateGeneralExpense(id, json); }
+    @JavascriptInterface public boolean deleteGeneralExpense(long id) { return db.deleteGeneralExpense(id); }
 }

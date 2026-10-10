@@ -5,7 +5,7 @@ const nav = document.getElementById('nav');
 const menuButton = document.getElementById('menuButton');
 const toastEl = document.getElementById('toast');
 
-let snapshot = { paycards: [], freelance: [], receivables: [], history: [], movements: [] };
+let snapshot = { paycards: [], freelance: [], receivables: [], generalExpenses: [], history: [], movements: [] };
 let currentView = 'overview';
 let detail = null;
 let overviewMonth = localMonthKey();
@@ -50,13 +50,17 @@ const NativeAdapter = {
   updateFreelanceExpensePayment(id, a) { return Android.updateFreelanceExpensePayment(Number(id), Number(a)); },
   createReceivable(o) { return Number(Android.createReceivable(JSON.stringify(o))); },
   updateReceivable(id, o) { return Android.updateReceivable(Number(id), JSON.stringify(o)); },
-  deleteReceivable(id) { return Android.deleteReceivable(Number(id)); }
+  deleteReceivable(id) { return Android.deleteReceivable(Number(id)); },
+  createGeneralExpense(o) { return Number(Android.createGeneralExpense(JSON.stringify(o))); },
+  updateGeneralExpense(id, o) { return Android.updateGeneralExpense(Number(id), JSON.stringify(o)); },
+  deleteGeneralExpense(id) { return Android.deleteGeneralExpense(Number(id)); }
 };
 
 function makeMock() {
   const key = 'financial-monitoring-browser-preview-v2';
   let s; try { s = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { s = null; }
-  if (!s) s = { paycards: [], freelance: [], receivables: [], history: [], movements: [] };
+  if (!s) s = { paycards: [], freelance: [], receivables: [], generalExpenses: [], history: [], movements: [] };
+  if (!s.generalExpenses) s.generalExpenses = [];
   if (!s.movements) s.movements = [];
   const save = () => localStorage.setItem(key, JSON.stringify(s));
   const next = a => a.reduce((m, x) => Math.max(m, n(x.id)), 0) + 1;
@@ -127,13 +131,33 @@ function makeMock() {
       if (n(before.amountReceived) !== n(o.amountReceived)) { const delta = n(o.amountReceived) - n(before.amountReceived); move('receivable_repayment', 'receivable', id, 'receivable', id, delta, `${delta >= 0 ? 'Repayment' : 'Repayment correction'} from ${o.personName}`); hist('receivable', id, 'payment', `Repayment updated for ${o.personName}`, { before: n(before.amountReceived), after: n(o.amountReceived), delta, date: localDateKey() }); }
       hist('receivable', id, 'edited', 'Money owed to me entry edited', { before, after: s.receivables[i] }); save(); return true;
     },
-    deleteReceivable(id) { const x = byId(s.receivables, id); if (!x) return false; hist('receivable', id, 'deleted', 'Money owed to me entry deleted', x); removeMoves(m => m.parentType === 'receivable' && Number(m.parentId) === Number(id)); s.receivables = s.receivables.filter(x => x.id != id); save(); return true; }
+    deleteReceivable(id) { const x = byId(s.receivables, id); if (!x) return false; hist('receivable', id, 'deleted', 'Money owed to me entry deleted', x); removeMoves(m => m.parentType === 'receivable' && Number(m.parentId) === Number(id)); s.receivables = s.receivables.filter(x => x.id != id); save(); return true; },
+    createGeneralExpense(o) {
+      const id = next(s.generalExpenses); const x = { ...o, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      s.generalExpenses.push(x); move('general_expense', 'general_expense', id, 'general_expense', id, -n(o.amount), `General expense: ${o.name}`);
+      const m = s.movements[0]; if (m) m.movementDate = o.expenseDate || localDateKey();
+      hist('general_expense', id, 'created', 'General expense created', x); save(); return id;
+    },
+    updateGeneralExpense(id, o) {
+      const i = s.generalExpenses.findIndex(x => x.id == id); if (i < 0) return false;
+      const before = JSON.parse(JSON.stringify(s.generalExpenses[i])); s.generalExpenses[i] = { ...before, ...o, updatedAt: new Date().toISOString() };
+      removeMoves(m => m.sourceType === 'general_expense' && Number(m.sourceId) === Number(id));
+      move('general_expense', 'general_expense', id, 'general_expense', id, -n(o.amount), `General expense: ${o.name}`);
+      const m = s.movements[0]; if (m) m.movementDate = o.expenseDate || localDateKey();
+      hist('general_expense', id, 'edited', 'General expense edited', { before, after: s.generalExpenses[i] }); save(); return true;
+    },
+    deleteGeneralExpense(id) {
+      const x = byId(s.generalExpenses, id); if (!x) return false;
+      hist('general_expense', id, 'deleted', 'General expense deleted', x);
+      removeMoves(m => m.sourceType === 'general_expense' && Number(m.sourceId) === Number(id));
+      s.generalExpenses = s.generalExpenses.filter(x => x.id != id); save(); return true;
+    }
   };
 }
 
 const DB = (typeof Android !== 'undefined' && Android.getSnapshot) ? NativeAdapter : makeMock();
 
-function refresh() { snapshot = DB.snapshot(); if (!snapshot.movements) snapshot.movements = []; render(); }
+function refresh() { snapshot = DB.snapshot(); if (!snapshot.generalExpenses) snapshot.generalExpenses = []; if (!snapshot.movements) snapshot.movements = []; render(); }
 function showView(view) { currentView = view; detail = null; nav.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.view === view)); nav.classList.remove('open'); render(); window.scrollTo(0, 0); }
 nav.addEventListener('click', e => { const b = e.target.closest('button[data-view]'); if (b) showView(b.dataset.view); });
 menuButton.addEventListener('click', () => nav.classList.toggle('open'));
@@ -142,6 +166,7 @@ window.handleAndroidBack = () => {
   if (detail) {
     if (detail.type.startsWith('payday')) { detail = null; currentView = 'payday'; }
     else if (detail.type.startsWith('freelance')) { detail = null; currentView = 'freelance'; }
+    else if (detail.type.startsWith('generalExpense')) { detail = null; currentView = 'generalExpenses'; }
     else { detail = null; currentView = 'receivables'; }
     render(); window.scrollTo(0, 0); return true;
   }
@@ -156,8 +181,10 @@ function render() {
   if (detail?.type === 'paydayForm') return renderPaydayForm(detail.id || null);
   if (detail?.type === 'freelanceForm') return renderFreelanceForm(detail.id || null);
   if (detail?.type === 'receivableForm') return renderReceivableForm(detail.id || null);
+  if (detail?.type === 'generalExpenseForm') return renderGeneralExpenseForm(detail.id || null);
   if (currentView === 'payday') return renderPaydayDashboard();
   if (currentView === 'freelance') return renderFreelanceDashboard();
+  if (currentView === 'generalExpenses') return renderGeneralExpenses();
   if (currentView === 'receivables') return renderReceivables();
   if (currentView === 'history') return renderHistory();
   renderOverview();
@@ -180,12 +207,20 @@ function trackedAvailable() {
   return sum(snapshot.paycards.filter(isPaydayReceived), p => p.netPay) + sum(snapshot.freelance, f => f.amountReceived) + movementTotal();
 }
 
+function spendingTotal({ month = null, year = null } = {}) {
+  return -sum(snapshot.movements.filter(m => {
+    if (!['expense_payment', 'general_expense'].includes(m.kind)) return false;
+    if (month && monthOf(m.movementDate) !== month) return false;
+    if (year && yearOf(m.movementDate) !== Number(year)) return false;
+    return true;
+  }), m => m.amount);
+}
+
 function periodStats(monthKey) {
   const salary = sum(snapshot.paycards.filter(x => isPaydayReceived(x) && monthOf(x.paydayDate) === monthKey), x => x.netPay);
   const freelance = sum(snapshot.freelance.filter(x => monthOf(x.incomeDate) === monthKey), x => x.amountReceived);
   const repayment = movementTotal({ month: monthKey, kind: 'receivable_repayment' });
-  const expenseMovement = movementTotal({ month: monthKey, kind: 'expense_payment' });
-  const spending = -expenseMovement;
+  const spending = spendingTotal({ month: monthKey });
   const income = salary + freelance + repayment;
   return { salary, freelance, repayment, spending, income, net: income - spending };
 }
@@ -194,7 +229,7 @@ function yearStats(year) {
   const salary = sum(snapshot.paycards.filter(x => isPaydayReceived(x) && yearOf(x.paydayDate) === Number(year)), x => x.netPay);
   const freelance = sum(snapshot.freelance.filter(x => yearOf(x.incomeDate) === Number(year)), x => x.amountReceived);
   const repayment = movementTotal({ year, kind: 'receivable_repayment' });
-  const spending = -movementTotal({ year, kind: 'expense_payment' });
+  const spending = spendingTotal({ year });
   const income = salary + freelance + repayment;
   return { salary, freelance, repayment, spending, income, net: income - spending };
 }
@@ -354,6 +389,32 @@ function renderFreelanceForm(id) {
 }
 window.submitFreelance = (ev, id) => { ev.preventDefault(); const o = { incomeDate: document.getElementById('incomeDate').value, projectName: document.getElementById('projectName').value.trim(), clientName: document.getElementById('clientName').value.trim(), amountReceived: n(document.getElementById('amountReceived').value), expenses: collectExpenses() }; const result = id ? DB.updateFreelance(id, o) : DB.createFreelance(o); const ok = id ? result : result > 0; if (ok) { toast(id ? 'Freelance card updated' : 'Freelance card created'); snapshot = DB.snapshot(); detail = id ? { type: 'freelance', id } : { type: 'freelance', id: Number(result) }; render(); } else toast('Could not save freelance card'); };
 
+function renderGeneralExpenses() {
+  const groups = groupByMonth(snapshot.generalExpenses, 'expenseDate');
+  const thisMonth = sum(snapshot.generalExpenses.filter(x => monthOf(x.expenseDate) === localMonthKey()), x => x.amount);
+  const total = sum(snapshot.generalExpenses, x => x.amount);
+  app.innerHTML = `<section class="hero"><div class="hero-row"><div><div class="eyebrow">ACCUMULATED BALANCE</div><h2>General Expenses</h2><div class="muted small">Use this for purchases made from your accumulated available money when they are not tied to a specific Payday or Freelance card.</div></div><button class="button primary" onclick="openGeneralExpenseForm()">＋ Add Expense</button></div></section>
+    <section class="summary-grid three"><article class="summary-card"><span>This month</span><strong>${money(thisMonth)}</strong></article><article class="summary-card"><span>All-time general expenses</span><strong>${money(total)}</strong></article><article class="summary-card"><span>Entries</span><strong>${snapshot.generalExpenses.length}</strong></article></section>
+    ${!groups.length ? `<div class="empty">No general expenses yet.</div>` : groups.map(([k, items]) => `<section><div class="section-head"><div><div class="eyebrow">MONTH</div><h2>${h(monthLabel(k))}</h2></div><strong>${money(sum(items, x => x.amount))}</strong></div><div class="card-grid">${items.map(generalExpenseCardHtml).join('')}</div></section>`).join('')}`;
+}
+function generalExpenseCardHtml(x) {
+  return `<article class="finance-card"><div class="card-top"><span class="date-pill">${h(humanDate(x.expenseDate))}</span><strong class="negative">${money(x.amount)}</strong></div><div class="metric-label">${h(x.name)}</div>${x.description ? `<div class="muted small spacer">${h(x.description)}</div>` : ''}<div class="card-actions"><button class="mini" onclick="openGeneralExpenseForm(${x.id})">Edit</button><button class="mini danger" onclick="removeGeneralExpense(${x.id})">Delete</button></div></article>`;
+}
+window.openGeneralExpenseForm = id => { detail = { type: 'generalExpenseForm', id: id ? Number(id) : null }; render(); window.scrollTo(0, 0); };
+window.removeGeneralExpense = id => { if (confirm('Delete this general expense? It will be removed from active spending totals, while the deleted snapshot stays in History.')) { DB.deleteGeneralExpense(id); toast('General expense deleted'); detail = null; currentView = 'generalExpenses'; refresh(); } };
+function renderGeneralExpenseForm(id) {
+  const x = id ? byId(snapshot.generalExpenses, id) : null;
+  app.innerHTML = `<section class="hero"><div><button class="mini" onclick="backToGeneralExpenses()">← General Expenses</button><div class="spacer"></div><div class="eyebrow">${x ? 'EDIT' : 'NEW'} GENERAL EXPENSE</div><h2>${x ? 'Edit General Expense' : 'Add General Expense'}</h2></div></section><form class="panel" onsubmit="submitGeneralExpense(event,${x ? x.id : 'null'})"><div class="form-grid"><label class="field"><span>Date Spent</span><input id="generalExpenseDate" type="date" required value="${h(x?.expenseDate || localDateKey())}"></label><label class="field"><span>Expense Name</span><input id="generalExpenseName" required value="${h(x?.name || '')}" placeholder="e.g. Keyboard, Dinner, Repair"></label><label class="field"><span>Amount</span><input id="generalExpenseAmount" type="number" min="0.01" step="0.01" required value="${x ? h(x.amount) : ''}"></label><label class="field"><span>Description</span><textarea id="generalExpenseDescription" placeholder="Optional note">${h(x?.description || '')}</textarea></label></div><div class="card-actions"><button class="button primary" type="submit">${x ? 'Save Changes' : 'Add Expense'}</button></div></form>`;
+}
+window.backToGeneralExpenses = () => { detail = null; currentView = 'generalExpenses'; render(); };
+window.submitGeneralExpense = (ev, id) => {
+  ev.preventDefault();
+  const o = { expenseDate: document.getElementById('generalExpenseDate').value, name: document.getElementById('generalExpenseName').value.trim(), amount: n(document.getElementById('generalExpenseAmount').value), description: document.getElementById('generalExpenseDescription').value.trim() };
+  const result = id ? DB.updateGeneralExpense(id, o) : DB.createGeneralExpense(o);
+  const ok = id ? result : result > 0;
+  if (ok) { toast(id ? 'General expense updated' : 'General expense added'); snapshot = DB.snapshot(); detail = null; currentView = 'generalExpenses'; render(); } else toast('Could not save general expense');
+};
+
 function renderReceivables() {
   const outstanding = currentOutstandingReceivables();
   let body = '<div class="empty">Nobody is recorded as owing you money.</div>';
@@ -376,7 +437,7 @@ window.backToReceivables = () => { detail = null; currentView = 'receivables'; r
 window.submitReceivable = (ev, id) => { ev.preventDefault(); const o = { personName: document.getElementById('personName').value.trim(), amountOwed: n(document.getElementById('amountOwed').value), dateOwed: document.getElementById('dateOwed').value, dueDate: document.getElementById('receivableDue').value || '', description: document.getElementById('receivableDescription').value.trim(), amountReceived: n(document.getElementById('receivedSoFar').value) }; const result = id ? DB.updateReceivable(id, o) : DB.createReceivable(o); const ok = id ? result : result > 0; if (ok) { toast(id ? 'Entry updated' : 'Entry created'); snapshot = DB.snapshot(); detail = null; currentView = 'receivables'; render(); } else toast('Could not save entry'); };
 
 function renderHistory() {
-  app.innerHTML = `<section class="hero"><div><div class="eyebrow">AUDIT LOG</div><h2>History</h2><div class="muted small">Created, edited, payment-corrected, and deleted records remain visible here with timestamps.</div></div></section><section class="panel"><div class="filter-row"><label class="field"><span>Action</span><select id="historyAction" onchange="filterHistory()"><option value="all">All</option><option value="created">Created</option><option value="edited">Edited</option><option value="payment">Payment Updates</option><option value="deleted">Deleted</option></select></label><label class="field"><span>Section</span><select id="historyType" onchange="filterHistory()"><option value="all">All</option><option value="payday">Payday</option><option value="freelance">Freelance</option><option value="receivable">Money Owed to Me</option></select></label></div><div id="historyList"></div></section>`;
+  app.innerHTML = `<section class="hero"><div><div class="eyebrow">AUDIT LOG</div><h2>History</h2><div class="muted small">Created, edited, payment-corrected, and deleted records remain visible here with timestamps.</div></div></section><section class="panel"><div class="filter-row"><label class="field"><span>Action</span><select id="historyAction" onchange="filterHistory()"><option value="all">All</option><option value="created">Created</option><option value="edited">Edited</option><option value="payment">Payment Updates</option><option value="deleted">Deleted</option></select></label><label class="field"><span>Section</span><select id="historyType" onchange="filterHistory()"><option value="all">All</option><option value="payday">Payday</option><option value="freelance">Freelance</option><option value="receivable">Money Owed to Me</option><option value="general_expense">General Expenses</option></select></label></div><div id="historyList"></div></section>`;
   filterHistory();
 }
 window.filterHistory = () => {
@@ -387,9 +448,9 @@ window.filterHistory = () => {
 function historyDetails(x) {
   const d = x.details || {};
   if (x.action === 'payment' && d.before !== undefined) return `<div class="small muted">${d.expense ? `${h(d.expense)} • ` : ''}${money(d.before)} → ${money(d.after)}${d.date ? ` • recorded ${h(humanDate(d.date))}` : ''}</div>`;
-  if (x.action === 'deleted') { const date = d.paydayDate || d.incomeDate || d.dateOwed; return `<div class="small muted">Deleted snapshot${date ? ` • record date ${h(humanDate(date))}` : ''}</div>`; }
+  if (x.action === 'deleted') { const date = d.paydayDate || d.incomeDate || d.dateOwed || d.expenseDate; return `<div class="small muted">Deleted snapshot${date ? ` • record date ${h(humanDate(date))}` : ''}</div>`; }
   if (x.action === 'edited' && d.before && d.after) {
-    const date = d.after.paydayDate || d.after.incomeDate || d.after.dateOwed;
+    const date = d.after.paydayDate || d.after.incomeDate || d.after.dateOwed || d.after.expenseDate;
     return `<div class="small muted">${date ? `Record date: ${h(humanDate(date))}` : 'Record updated'}</div>`;
   }
   return '';

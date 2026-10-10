@@ -18,7 +18,7 @@ import java.util.Set;
 
 public class FinanceDatabase extends SQLiteOpenHelper {
     private static final String DB_NAME = "financial_monitoring.db";
-    private static final int DB_VERSION = 3;
+    private static final int DB_VERSION = 4;
 
     public FinanceDatabase(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
@@ -46,6 +46,10 @@ public class FinanceDatabase extends SQLiteOpenHelper {
         }
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE paycards ADD COLUMN allowance REAL NOT NULL DEFAULT 0");
+        }
+        if (oldVersion < 4) {
+            createGeneralExpenseTable(db);
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_general_expenses_date ON general_expenses(expense_date)");
         }
     }
 
@@ -100,6 +104,8 @@ public class FinanceDatabase extends SQLiteOpenHelper {
                 "created_at TEXT NOT NULL," +
                 "updated_at TEXT NOT NULL)");
 
+        createGeneralExpenseTable(db);
+
         db.execSQL("CREATE TABLE IF NOT EXISTS history (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "entity_type TEXT NOT NULL," +
@@ -108,6 +114,17 @@ public class FinanceDatabase extends SQLiteOpenHelper {
                 "summary TEXT NOT NULL," +
                 "details_json TEXT," +
                 "created_at TEXT NOT NULL)");
+    }
+
+    private void createGeneralExpenseTable(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS general_expenses (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "expense_date TEXT NOT NULL," +
+                "name TEXT NOT NULL," +
+                "amount REAL NOT NULL DEFAULT 0," +
+                "description TEXT," +
+                "created_at TEXT NOT NULL," +
+                "updated_at TEXT NOT NULL)");
     }
 
     private void createMovementTable(SQLiteDatabase db) {
@@ -130,6 +147,7 @@ public class FinanceDatabase extends SQLiteOpenHelper {
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_freelance_date ON freelance_cards(income_date)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_freelance_expenses_card ON freelance_expenses(freelance_card_id)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_receivables_date ON receivables(date_owed)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_general_expenses_date ON general_expenses(expense_date)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_history_created ON history(created_at)");
         createMovementIndexes(db);
     }
@@ -429,10 +447,61 @@ public class FinanceDatabase extends SQLiteOpenHelper {
 
     public synchronized boolean deleteReceivable(long id){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{JSONObject snapshot=receivableJson(db,id);if(snapshot==null)return false;log(db,"receivable",id,"deleted","Money owed to me entry deleted",snapshot.toString());db.delete("cash_movements","parent_type=? AND parent_id=?",new String[]{"receivable",String.valueOf(id)});db.delete("receivables","id=?",new String[]{String.valueOf(id)});db.setTransactionSuccessful();return true;}catch(Exception e){return false;}finally{db.endTransaction();}}
 
+    public synchronized long createGeneralExpense(String json){
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try{
+            JSONObject o=new JSONObject(json);String ts=now();ContentValues v=generalExpenseValues(o,ts,true);
+            long id=db.insertOrThrow("general_expenses",null,v);
+            JSONObject saved=generalExpenseJson(db,id);
+            insertMovement(db,"general_expense","general_expense",id,"general_expense",id,
+                    -saved.optDouble("amount",0),saved.optString("expenseDate",today()),
+                    "General expense: "+saved.optString("name","Expense"));
+            log(db,"general_expense",id,"created","General expense created",saved.toString());
+            db.setTransactionSuccessful();return id;
+        }catch(Exception e){return -1;}finally{db.endTransaction();}
+    }
+
+    private ContentValues generalExpenseValues(JSONObject o,String ts,boolean created)throws JSONException{
+        ContentValues v=new ContentValues();
+        v.put("expense_date",o.getString("expenseDate"));
+        v.put("name",o.getString("name").trim());
+        v.put("amount",cleanMoney(o.optDouble("amount",0)));
+        String desc=nullableString(o,"description");if(desc==null)v.putNull("description");else v.put("description",desc);
+        if(created)v.put("created_at",ts);v.put("updated_at",ts);return v;
+    }
+
+    public synchronized boolean updateGeneralExpense(long id,String json){
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try{
+            JSONObject before=generalExpenseJson(db,id);if(before==null)return false;
+            JSONObject o=new JSONObject(json);
+            db.update("general_expenses",generalExpenseValues(o,now(),false),"id=?",new String[]{String.valueOf(id)});
+            JSONObject after=generalExpenseJson(db,id);
+            db.delete("cash_movements","source_type=? AND source_id=?",new String[]{"general_expense",String.valueOf(id)});
+            insertMovement(db,"general_expense","general_expense",id,"general_expense",id,
+                    -after.optDouble("amount",0),after.optString("expenseDate",today()),
+                    "General expense: "+after.optString("name","Expense"));
+            JSONObject details=new JSONObject();details.put("before",before);details.put("after",after);
+            log(db,"general_expense",id,"edited","General expense edited",details.toString());
+            db.setTransactionSuccessful();return true;
+        }catch(Exception e){return false;}finally{db.endTransaction();}
+    }
+
+    public synchronized boolean deleteGeneralExpense(long id){
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try{
+            JSONObject snapshot=generalExpenseJson(db,id);if(snapshot==null)return false;
+            log(db,"general_expense",id,"deleted","General expense deleted",snapshot.toString());
+            db.delete("cash_movements","source_type=? AND source_id=?",new String[]{"general_expense",String.valueOf(id)});
+            db.delete("general_expenses","id=?",new String[]{String.valueOf(id)});
+            db.setTransactionSuccessful();return true;
+        }catch(Exception e){return false;}finally{db.endTransaction();}
+    }
+
     public synchronized String getSnapshot(){
         SQLiteDatabase db=getReadableDatabase();
-        try{JSONObject root=new JSONObject();root.put("paycards",queryPaycards(db));root.put("freelance",queryFreelance(db));root.put("receivables",queryReceivables(db));root.put("history",queryHistory(db));root.put("movements",queryMovements(db));return root.toString();}
-        catch(Exception e){return "{\"paycards\":[],\"freelance\":[],\"receivables\":[],\"history\":[],\"movements\":[],\"error\":\"snapshot_failed\"}";}
+        try{JSONObject root=new JSONObject();root.put("paycards",queryPaycards(db));root.put("freelance",queryFreelance(db));root.put("receivables",queryReceivables(db));root.put("generalExpenses",queryGeneralExpenses(db));root.put("history",queryHistory(db));root.put("movements",queryMovements(db));return root.toString();}
+        catch(Exception e){return "{\"paycards\":[],\"freelance\":[],\"receivables\":[],\"generalExpenses\":[],\"history\":[],\"movements\":[],\"error\":\"snapshot_failed\"}";}
     }
 
     private JSONArray queryPaycards(SQLiteDatabase db)throws JSONException{JSONArray a=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,payday_date,net_pay,allowance,created_at,updated_at FROM paycards ORDER BY payday_date DESC,id DESC",null)){while(c.moveToNext()){JSONObject o=new JSONObject();long id=c.getLong(0);o.put("id",id);o.put("paydayDate",c.getString(1));o.put("netPay",c.getDouble(2));o.put("allowance",c.getDouble(3));o.put("createdAt",c.getString(4));o.put("updatedAt",c.getString(5));o.put("expenses",queryExpenses(db,id));a.put(o);}}return a;}
@@ -440,10 +509,12 @@ public class FinanceDatabase extends SQLiteOpenHelper {
     private JSONArray queryFreelance(SQLiteDatabase db)throws JSONException{JSONArray a=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,income_date,project_name,client_name,amount_received,created_at,updated_at FROM freelance_cards ORDER BY income_date DESC,id DESC",null)){while(c.moveToNext()){JSONObject o=new JSONObject();long id=c.getLong(0);o.put("id",id);o.put("incomeDate",c.getString(1));o.put("projectName",c.getString(2));o.put("clientName",c.isNull(3)?JSONObject.NULL:c.getString(3));o.put("amountReceived",c.getDouble(4));o.put("createdAt",c.getString(5));o.put("updatedAt",c.getString(6));o.put("expenses",queryFreelanceExpenses(db,id));a.put(o);}}return a;}
     private JSONArray queryFreelanceExpenses(SQLiteDatabase db,long parent)throws JSONException{JSONArray a=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,name,amount_due,due_date,amount_paid,created_at,updated_at FROM freelance_expenses WHERE freelance_card_id=? ORDER BY id",new String[]{String.valueOf(parent)})){while(c.moveToNext()){JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("name",c.getString(1));o.put("amountDue",c.getDouble(2));o.put("dueDate",c.isNull(3)?JSONObject.NULL:c.getString(3));o.put("amountPaid",c.getDouble(4));o.put("createdAt",c.getString(5));o.put("updatedAt",c.getString(6));a.put(o);}}return a;}
     private JSONArray queryReceivables(SQLiteDatabase db)throws JSONException{JSONArray a=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,person_name,amount_owed,date_owed,due_date,description,amount_received,created_at,updated_at FROM receivables ORDER BY date_owed DESC,id DESC",null)){while(c.moveToNext()){JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("personName",c.getString(1));o.put("amountOwed",c.getDouble(2));o.put("dateOwed",c.getString(3));o.put("dueDate",c.isNull(4)?JSONObject.NULL:c.getString(4));o.put("description",c.isNull(5)?JSONObject.NULL:c.getString(5));o.put("amountReceived",c.getDouble(6));o.put("createdAt",c.getString(7));o.put("updatedAt",c.getString(8));a.put(o);}}return a;}
+    private JSONArray queryGeneralExpenses(SQLiteDatabase db)throws JSONException{JSONArray a=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,expense_date,name,amount,description,created_at,updated_at FROM general_expenses ORDER BY expense_date DESC,id DESC",null)){while(c.moveToNext()){JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("expenseDate",c.getString(1));o.put("name",c.getString(2));o.put("amount",c.getDouble(3));o.put("description",c.isNull(4)?JSONObject.NULL:c.getString(4));o.put("createdAt",c.getString(5));o.put("updatedAt",c.getString(6));a.put(o);}}return a;}
     private JSONArray queryHistory(SQLiteDatabase db)throws JSONException{JSONArray a=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,entity_type,entity_id,action,summary,details_json,created_at FROM history ORDER BY id DESC LIMIT 2000",null)){while(c.moveToNext()){JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("entityType",c.getString(1));o.put("entityId",c.isNull(2)?JSONObject.NULL:c.getLong(2));o.put("action",c.getString(3));o.put("summary",c.getString(4));String d=c.getString(5);try{o.put("details",new JSONObject(d));}catch(Exception ignore){o.put("detailsRaw",d);}o.put("createdAt",c.getString(6));a.put(o);}}return a;}
     private JSONArray queryMovements(SQLiteDatabase db)throws JSONException{JSONArray a=new JSONArray();try(Cursor c=db.rawQuery("SELECT id,kind,source_type,source_id,parent_type,parent_id,amount,movement_date,note,created_at FROM cash_movements ORDER BY id DESC",null)){while(c.moveToNext()){JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("kind",c.getString(1));o.put("sourceType",c.getString(2));o.put("sourceId",c.getLong(3));o.put("parentType",c.isNull(4)?JSONObject.NULL:c.getString(4));o.put("parentId",c.isNull(5)?JSONObject.NULL:c.getLong(5));o.put("amount",c.getDouble(6));o.put("movementDate",c.getString(7));o.put("note",c.isNull(8)?JSONObject.NULL:c.getString(8));o.put("createdAt",c.getString(9));a.put(o);}}return a;}
 
     private JSONObject paycardJson(SQLiteDatabase db,long id)throws JSONException{try(Cursor c=db.rawQuery("SELECT id,payday_date,net_pay,allowance,created_at,updated_at FROM paycards WHERE id=?",new String[]{String.valueOf(id)})){if(!c.moveToFirst())return null;JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("paydayDate",c.getString(1));o.put("netPay",c.getDouble(2));o.put("allowance",c.getDouble(3));o.put("createdAt",c.getString(4));o.put("updatedAt",c.getString(5));o.put("expenses",queryExpenses(db,id));return o;}}
     private JSONObject freelanceJson(SQLiteDatabase db,long id)throws JSONException{try(Cursor c=db.rawQuery("SELECT id,income_date,project_name,client_name,amount_received,created_at,updated_at FROM freelance_cards WHERE id=?",new String[]{String.valueOf(id)})){if(!c.moveToFirst())return null;JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("incomeDate",c.getString(1));o.put("projectName",c.getString(2));o.put("clientName",c.isNull(3)?JSONObject.NULL:c.getString(3));o.put("amountReceived",c.getDouble(4));o.put("createdAt",c.getString(5));o.put("updatedAt",c.getString(6));o.put("expenses",queryFreelanceExpenses(db,id));return o;}}
     private JSONObject receivableJson(SQLiteDatabase db,long id)throws JSONException{try(Cursor c=db.rawQuery("SELECT id,person_name,amount_owed,date_owed,due_date,description,amount_received,created_at,updated_at FROM receivables WHERE id=?",new String[]{String.valueOf(id)})){if(!c.moveToFirst())return null;JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("personName",c.getString(1));o.put("amountOwed",c.getDouble(2));o.put("dateOwed",c.getString(3));o.put("dueDate",c.isNull(4)?JSONObject.NULL:c.getString(4));o.put("description",c.isNull(5)?JSONObject.NULL:c.getString(5));o.put("amountReceived",c.getDouble(6));o.put("createdAt",c.getString(7));o.put("updatedAt",c.getString(8));return o;}}
+    private JSONObject generalExpenseJson(SQLiteDatabase db,long id)throws JSONException{try(Cursor c=db.rawQuery("SELECT id,expense_date,name,amount,description,created_at,updated_at FROM general_expenses WHERE id=?",new String[]{String.valueOf(id)})){if(!c.moveToFirst())return null;JSONObject o=new JSONObject();o.put("id",c.getLong(0));o.put("expenseDate",c.getString(1));o.put("name",c.getString(2));o.put("amount",c.getDouble(3));o.put("description",c.isNull(4)?JSONObject.NULL:c.getString(4));o.put("createdAt",c.getString(5));o.put("updatedAt",c.getString(6));return o;}}
 }

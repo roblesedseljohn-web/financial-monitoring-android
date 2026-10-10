@@ -27,6 +27,7 @@ function byId(list, id) { return list.find(x => Number(x.id) === Number(id)); }
 function monthOf(date) { return String(date || '').slice(0, 7); }
 function yearOf(date) { return Number(String(date || '').slice(0, 4)); }
 function isOverdue(date, remaining) { return !!date && remaining > 0 && date < localDateKey(); }
+function isPaydayReceived(paycard) { return !!paycard?.paydayDate && paycard.paydayDate <= localDateKey(); }
 function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => toastEl.hidden = true, 2200); }
 
 function expenseStatus(amountDue, amountPaid) {
@@ -176,11 +177,11 @@ function currentOpenBills() {
 }
 function currentOutstandingReceivables() { return sum(snapshot.receivables, r => Math.max(n(r.amountOwed) - n(r.amountReceived), 0)); }
 function trackedAvailable() {
-  return sum(snapshot.paycards, p => p.netPay) + sum(snapshot.freelance, f => f.amountReceived) + movementTotal();
+  return sum(snapshot.paycards.filter(isPaydayReceived), p => p.netPay) + sum(snapshot.freelance, f => f.amountReceived) + movementTotal();
 }
 
 function periodStats(monthKey) {
-  const salary = sum(snapshot.paycards.filter(x => monthOf(x.paydayDate) === monthKey), x => x.netPay);
+  const salary = sum(snapshot.paycards.filter(x => isPaydayReceived(x) && monthOf(x.paydayDate) === monthKey), x => x.netPay);
   const freelance = sum(snapshot.freelance.filter(x => monthOf(x.incomeDate) === monthKey), x => x.amountReceived);
   const repayment = movementTotal({ month: monthKey, kind: 'receivable_repayment' });
   const expenseMovement = movementTotal({ month: monthKey, kind: 'expense_payment' });
@@ -190,7 +191,7 @@ function periodStats(monthKey) {
 }
 
 function yearStats(year) {
-  const salary = sum(snapshot.paycards.filter(x => yearOf(x.paydayDate) === Number(year)), x => x.netPay);
+  const salary = sum(snapshot.paycards.filter(x => isPaydayReceived(x) && yearOf(x.paydayDate) === Number(year)), x => x.netPay);
   const freelance = sum(snapshot.freelance.filter(x => yearOf(x.incomeDate) === Number(year)), x => x.amountReceived);
   const repayment = movementTotal({ year, kind: 'receivable_repayment' });
   const spending = -movementTotal({ year, kind: 'expense_payment' });
@@ -207,9 +208,9 @@ function renderOverview() {
     rows.push({ k, ...periodStats(k) });
   }
   app.innerHTML = `
-    <section class="hero"><div class="hero-row"><div><div class="eyebrow">YOUR MONEY AT A GLANCE</div><h2>Overview</h2><div class="muted small">Only money actually received or paid changes your tracked cash. Money still owed to you and unpaid bills stay separate.</div></div></div></section>
+    <section class="hero"><div class="hero-row"><div><div class="eyebrow">YOUR MONEY AT A GLANCE</div><h2>Overview</h2><div class="muted small">Only money actually received or paid changes your tracked cash. Future payday cards are excluded until their payday date arrives. Money still owed to you and unpaid bills stay separate.</div></div></div></section>
     <section class="summary-grid four">
-      <article class="summary-card accent-card"><span>Tracked money available</span><strong class="${trackedAvailable() < 0 ? 'negative' : 'positive'}">${money(trackedAvailable())}</strong><small>All recorded income − actual payments</small></article>
+      <article class="summary-card accent-card"><span>Tracked money available</span><strong class="${trackedAvailable() < 0 ? 'negative' : 'positive'}">${money(trackedAvailable())}</strong><small>Received income − actual payments; future salary excluded</small></article>
       <article class="summary-card"><span>Unpaid bills / expenses</span><strong class="negative">${money(currentOpenBills())}</strong><small>Pending obligations</small></article>
       <article class="summary-card"><span>Money owed to you</span><strong>${money(currentOutstandingReceivables())}</strong><small>Not counted until received</small></article>
       <article class="summary-card"><span>History entries</span><strong>${snapshot.history.length}</strong><small>Tracked changes</small></article>

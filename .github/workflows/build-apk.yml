@@ -36,10 +36,10 @@ jobs:
           gradle --no-daemon :app:assembleDebug
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk FinancialMonitoring-1.3.0-debug.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk FinancialMonitoring-1.4.0-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FinancialMonitoring-1.3.0-debug-apk
-          path: FinancialMonitoring-1.3.0-debug.apk
+          name: FinancialMonitoring-1.4.0-debug-apk
+          path: FinancialMonitoring-1.4.0-debug.apk

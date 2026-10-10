@@ -1,74 +1,79 @@
-# Financial Monitoring — Android 1.0.0
+# Financial Monitoring — Android 1.4.0
 
-Offline Android edition of the Financial Monitoring app.
+Offline-first Android edition of the Financial Monitoring app.
 
-## What is included
+## Main sections
 
 - **Overview**
   - Tracked money available
   - Unpaid bills / expenses
   - Money owed to you
-  - Monthly salary, freelance, repayments, spending, and net
-  - Yearly totals and January–December breakdown
-- **Payday Dashboard**
-  - Actual payday date (not hard-coded to the 15th/30th)
+  - Monthly and yearly salary, freelance income, repayments, actual spending, and net cash flow
+  - Future Payday cards do not count as received money until their payday date arrives
+  - Local database Export Backup / Import Backup controls
+- **Payday**
+  - Actual payday date
   - Net pay
+  - Permanent allowance field
   - Unlimited bills / expenses
-  - Due dates
-  - Amount paid remains editable even after an expense is fully paid
-  - Full / partial / unpaid status and remaining amount
-  - Edit / delete salary cards
-- **Freelance Dashboard**
-  - Date received, project, client, amount received
-  - Unlimited expenses with due dates and editable payments
-  - Edit / delete freelance cards
+  - Editable full / partial / zero payments
+  - Money left based on actual payments
+  - Possible money left after all listed bills are fully paid
+- **Freelance**
+  - Date received, project, client, and amount received
+  - Unlimited expenses
+  - Money left based on actual spending
+  - Possible money left after all listed expenses are fully paid
+- **General Expenses**
+  - Spending from accumulated available money that is not tied to a specific Payday or Freelance card
+  - Date, name, amount, optional description
+  - Counts as actual spending on the selected expense date
+  - Reduces Tracked money available
+  - Edit and delete support with History records
 - **Money Owed to Me**
-  - Person/source, amount owed, date owed, due date, description
-  - Partial repayments and fully-paid status
-  - Repayment corrections are allowed
+  - Partial and full repayments
+  - Repayments count as cash-in only when actually received
 - **History**
-  - Create, edit, payment changes, and delete events with timestamps
-  - Deleted records leave a snapshot in History
-- **Offline local database**
-  - SQLite (`financial_monitoring.db`) inside the app's private phone storage
-  - No Internet permission
-  - Android cloud backup is disabled in this build
+  - Created, edited, payment, and deleted events with timestamps
 
-## Important accounting behavior
+## Accounting behavior
 
-The app separates actual cash from pending obligations:
+The app separates actual cash from planned obligations:
 
-- Salary and freelance money count when their recorded received/payday date occurs.
-- Expense payments affect tracked cash only when you enter/save an amount paid.
-- Money owed to you is not treated as available cash until you record a repayment.
-- Payment corrections are reversible. A fully paid bill can be changed back to partial or zero.
+- Future salary is excluded from Overview until the Payday date arrives.
+- Payday and Freelance listed bills can be unpaid while still contributing to Possible money left.
+- Actual payments reduce tracked cash when they are recorded.
+- General Expenses are treated as immediate actual spending from the accumulated balance.
+- Money owed to you does not count as available money until repayment is recorded.
 
-For monthly/yearly cash-flow monitoring, payment changes are timestamped as local cash movements. This avoids assigning every payment to the salary-card month just because the expense belongs to that card.
+## Local data
+
+- SQLite database: `financial_monitoring.db`
+- Stored inside the app's private phone storage
+- No Internet permission
+- Android cloud backup remains disabled
+- Version 1.4.0 adds manual **Export Backup** and **Import Backup**
 
 ## Android project
 
 - Package: `com.financialmonitoring.app`
-- Version: `1.0.0` (`versionCode 2`)
-- Min Android: API 24 (Android 7.0)
+- Version: `1.4.0` (`versionCode 6`)
+- Min Android: API 24
 - Target / compile SDK: API 35
-- Android Gradle Plugin: 8.7.3
 - Gradle: 8.9
-- Database version: 2
+- Database version: 4
 
-## Build with Android Studio
+## GitHub Actions
 
-Open this folder in Android Studio, let Gradle sync, then use:
+Two workflows are included:
 
-**Build → Build App Bundle(s) / APK(s) → Build APK(s)**
+- **Build Financial Monitoring APK** — normal debug build for development/testing
+- **Build Signed Financial Monitoring APK** — manual permanent-signing build for installable updates
 
-The debug APK will be created under:
+For long-term phone use, configure the permanent signing workflow using `SIGNING_SETUP.md`. Do not commit the keystore or signing passwords to the repository.
 
-`app/build/outputs/apk/debug/app-debug.apk`
+## Moving from the old debug-signed app
 
-## Build with GitHub Actions
+Older GitHub debug builds may conflict because each clean runner can use a different temporary debug signing key.
 
-The included `.github/workflows/build-apk.yml` installs the required Android SDK packages, runs lint, builds the debug APK, and uploads it as a workflow artifact.
-
-## Data safety during the trial
-
-Uninstalling the app removes its local database. Until a backup/restore feature is added, do not uninstall the trial app if it contains records you want to keep.
+Use `MIGRATE_CURRENT_DATA.md` before the one-time uninstall/reinstall into the permanent signed build so the current SQLite records can be preserved.

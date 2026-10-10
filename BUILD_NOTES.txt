@@ -1,14 +1,19 @@
-Financial Monitoring Android 1.0.0
+Financial Monitoring Android 1.4.0
 
-Validated in this build environment:
-- JavaScript syntax: PASS
-- Browser-flow integration test using the browser-preview mock database: PASS
-- Paid -> partial payment reversal test: PASS
-- Payday + freelance + receivable + overview totals flow: PASS
-- Mobile responsive navigation test: PASS
-- Java source type/syntax check against Android/API stubs: PASS
+Key changes:
+- Added General Expenses for purchases from accumulated available money.
+- General Expenses count as actual spending by their recorded transaction date.
+- Added local database Export Backup / Import Backup through Android's document picker.
+- Database upgraded to version 4 with backward migration from existing app data.
+- Added permanent signed APK workflow documentation.
+- Future Payday income remains excluded from Overview until the payday date arrives.
+- Existing Payday allowance, possible-money-left, payment reversal, Freelance, receivables, and History behavior preserved.
 
-Not executable in this environment:
-- Full Android Gradle/APK compilation (Android SDK/build-tools are not installed here).
+Source-level checks performed:
+- JavaScript syntax parse: PASS
+- General Expenses UI and overview spending integration: PASS
+- Android bridge method presence: PASS
+- Database v4 schema and snapshot integration: PASS
+- Backup/import flow source review: PASS
 
-A GitHub Actions build workflow is included for a real Android SDK compile.
+Final Android lint/compile is validated by GitHub Actions after merge.

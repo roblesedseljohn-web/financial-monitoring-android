@@ -258,6 +258,7 @@ function renderOverview() {
       <article class="summary-card"><span>Money owed to you</span><strong>${money(currentOutstandingReceivables())}</strong><small>Not counted until received</small></article>
       <article class="summary-card"><span>History entries</span><strong>${snapshot.history.length}</strong><small>Tracked changes</small></article>
     </section>
+    <section class="panel"><div class="section-head"><div><div class="eyebrow">REMINDERS</div><h2>Payday & Due-Date Notifications</h2><div class="muted small">The app checks for payday dates and unpaid Payday/Freelance bills due today. Android may ask for notification permission. A daily reminder check is scheduled for around 8:00 AM, and the app also checks when opened.</div></div></div></section>
     <section class="panel"><div class="section-head"><div><div class="eyebrow">DATA SAFETY</div><h2>Database Backup</h2><div class="muted small">Export a local database backup before major app updates. Import replaces the app's current local data with the selected backup.</div></div></div><div class="card-actions"><button class="button secondary" onclick="exportDatabaseBackup()">Export Backup</button><button class="button secondary" onclick="importDatabaseBackup()">Import Backup</button></div></section>
     <section class="panel"><div class="filter-row"><label class="field"><span>Month</span><input id="overviewMonth" type="month" value="${h(overviewMonth)}"></label><button class="button secondary" onclick="applyOverviewMonth()">View month</button><label class="field"><span>Year</span><input id="overviewYear" type="number" min="2000" max="2100" value="${overviewYear}"></label><button class="button secondary" onclick="applyOverviewYear()">View year</button></div></section>
     <div class="section-head"><div><div class="eyebrow">MONTHLY</div><h2>${h(monthLabel(overviewMonth))}</h2></div></div>
@@ -407,10 +408,18 @@ function renderGeneralExpenses() {
     ${!groups.length ? `<div class="empty">No general expenses yet.</div>` : groups.map(([k, items]) => `<section><div class="section-head"><div><div class="eyebrow">MONTH</div><h2>${h(monthLabel(k))}</h2></div><strong>${money(sum(items, x => x.amount))}</strong></div><div class="card-grid">${items.map(generalExpenseCardHtml).join('')}</div></section>`).join('')}`;
 }
 function generalExpenseCardHtml(x) {
-  return `<article class="finance-card"><div class="card-top"><span class="date-pill">${h(humanDate(x.expenseDate))}</span><strong class="negative">${money(x.amount)}</strong></div><div class="metric-label">${h(x.name)}</div>${x.description ? `<div class="muted small spacer">${h(x.description)}</div>` : ''}<div class="card-actions"><button class="mini" onclick="openGeneralExpenseForm(${x.id})">Edit</button><button class="mini danger" onclick="removeGeneralExpense(${x.id})">Delete</button></div></article>`;
+  return `<article class="finance-card"><div class="card-top"><span class="date-pill">${h(humanDate(x.expenseDate))}</span><strong class="negative">${money(x.amount)}</strong></div><div class="metric-label">${h(x.name)}</div>${x.description ? `<div class="muted small spacer">${h(x.description)}</div>` : ''}<div class="card-actions"><button class="mini" onclick="openGeneralExpenseForm(${x.id})">Edit</button><button class="mini danger" onclick="removeGeneralExpense(${x.id})">Cancel / Delete</button></div></article>`;
 }
 window.openGeneralExpenseForm = id => { detail = { type: 'generalExpenseForm', id: id ? Number(id) : null }; render(); window.scrollTo(0, 0); };
-window.removeGeneralExpense = id => { if (confirm('Delete this general expense? It will be removed from active spending totals, while the deleted snapshot stays in History.')) { DB.deleteGeneralExpense(id); toast('General expense deleted'); detail = null; currentView = 'generalExpenses'; refresh(); } };
+window.removeGeneralExpense = id => {
+  if (!confirm('Delete this general expense? Use this when a purchase was cancelled or the entry should no longer count as spending. The deleted snapshot will remain in History.')) return;
+  const ok = DB.deleteGeneralExpense(id);
+  if (!ok) { toast('Could not delete general expense'); return; }
+  toast('General expense deleted');
+  detail = null;
+  currentView = 'generalExpenses';
+  refresh();
+};
 function renderGeneralExpenseForm(id) {
   const x = id ? byId(snapshot.generalExpenses, id) : null;
   app.innerHTML = `<section class="hero"><div><button class="mini" onclick="backToGeneralExpenses()">← General Expenses</button><div class="spacer"></div><div class="eyebrow">${x ? 'EDIT' : 'NEW'} GENERAL EXPENSE</div><h2>${x ? 'Edit General Expense' : 'Add General Expense'}</h2></div></section><form class="panel" onsubmit="submitGeneralExpense(event,${x ? x.id : 'null'})"><div class="form-grid"><label class="field"><span>Date Spent</span><input id="generalExpenseDate" type="date" required value="${h(x?.expenseDate || localDateKey())}"></label><label class="field"><span>Expense Name</span><input id="generalExpenseName" required value="${h(x?.name || '')}" placeholder="e.g. Keyboard, Dinner, Repair"></label><label class="field"><span>Amount</span><input id="generalExpenseAmount" type="number" min="0.01" step="0.01" required value="${x ? h(x.amount) : ''}"></label><label class="field"><span>Description</span><textarea id="generalExpenseDescription" placeholder="Optional note">${h(x?.description || '')}</textarea></label></div><div class="card-actions"><button class="button primary" type="submit">${x ? 'Save Changes' : 'Add Expense'}</button></div></form>`;

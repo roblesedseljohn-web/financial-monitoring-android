@@ -1,19 +1,24 @@
-Financial Monitoring Android 1.4.0
+Financial Monitoring Android 1.5.0
 
 Key changes:
-- Added General Expenses for purchases from accumulated available money.
-- General Expenses count as actual spending by their recorded transaction date.
-- Added local database Export Backup / Import Backup through Android's document picker.
-- Database upgraded to version 4 with backward migration from existing app data.
-- Added permanent signed APK workflow documentation.
-- Future Payday income remains excluded from Overview until the payday date arrives.
-- Existing Payday allowance, possible-money-left, payment reversal, Freelance, receivables, and History behavior preserved.
+- Fixed General Expenses Cancel / Delete confirmation by enabling WebChromeClient in the Android WebView.
+- General Expenses can be removed when a purchase is cancelled; deleted snapshots remain in History.
+- Added offline payday notifications when today matches a Payday card.
+- Added offline due-date notifications for unpaid Payday and Freelance bills/expenses due today.
+- Daily reminder check is scheduled around 8:00 AM and is restored after reboot/app replacement.
+- Android 13+ notification permission is requested when needed.
+- General Expenses now appear as their own value in monthly and yearly Overview summaries.
+- General Expenses now have their own column in the January–December breakdown table.
+- Total/Actual Spending continues to include General Expenses plus actual Payday/Freelance payments.
+- Existing future-payday behavior, allowance logic, backup/import, receivables, and local SQLite data model are preserved.
+- App version bumped to 1.5.0 (versionCode 7).
 
-Source-level checks performed:
-- JavaScript syntax parse: PASS
-- General Expenses UI and overview spending integration: PASS
-- Android bridge method presence: PASS
-- Database v4 schema and snapshot integration: PASS
-- Backup/import flow source review: PASS
+Source-level checks:
+- JavaScript syntax parse
+- General Expenses monthly/yearly reporting
+- General Expenses delete flow
+- Reminder scheduling / receiver registration
+- Notification permission handling
+- Payday and unpaid-due-today filtering
 
 Final Android lint/compile is validated by GitHub Actions after merge.

@@ -1,4 +1,4 @@
-# Financial Monitoring — Android 1.4.0
+# Financial Monitoring — Android 1.5.0
 
 Offline-first Android edition of the Financial Monitoring app.
 
@@ -8,7 +8,7 @@ Offline-first Android edition of the Financial Monitoring app.
   - Tracked money available
   - Unpaid bills / expenses
   - Money owed to you
-  - Monthly and yearly salary, freelance income, repayments, actual spending, and net cash flow
+  - Monthly and yearly salary, freelance income, repayments, General Expenses, actual spending, and net cash flow
   - Future Payday cards do not count as received money until their payday date arrives
   - Local database Export Backup / Import Backup controls
 - **Payday**
@@ -33,6 +33,11 @@ Offline-first Android edition of the Financial Monitoring app.
 - **Money Owed to Me**
   - Partial and full repayments
   - Repayments count as cash-in only when actually received
+- **Notifications**
+  - Payday reminder when today's date matches a Payday card
+  - Due-date reminder for unpaid Payday and Freelance bills/expenses due today
+  - Daily offline check scheduled around 8:00 AM, plus a check when the app opens
+  - Reminders are restored after device restart or app replacement
 - **History**
   - Created, edited, payment, and deleted events with timestamps
 
@@ -52,12 +57,13 @@ The app separates actual cash from planned obligations:
 - Stored inside the app's private phone storage
 - No Internet permission
 - Android cloud backup remains disabled
-- Version 1.4.0 adds manual **Export Backup** and **Import Backup**
+- Version 1.4.0+ includes manual **Export Backup** and **Import Backup**
+- Version 1.5.0 fixes WebView confirmation dialogs so Cancel / Delete actions work reliably
 
 ## Android project
 
 - Package: `com.financialmonitoring.app`
-- Version: `1.4.0` (`versionCode 6`)
+- Version: `1.5.0` (`versionCode 7`)
 - Min Android: API 24
 - Target / compile SDK: API 35
 - Gradle: 8.9

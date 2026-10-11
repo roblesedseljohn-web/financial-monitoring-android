@@ -1,24 +1,26 @@
 Financial Monitoring Android 1.5.0
 
 Key changes:
-- Fixed General Expenses Cancel / Delete confirmation by enabling WebChromeClient in the Android WebView.
-- General Expenses can be removed when a purchase is cancelled; deleted snapshots remain in History.
-- Added offline payday notifications when today matches a Payday card.
-- Added offline due-date notifications for unpaid Payday and Freelance bills/expenses due today.
-- Daily reminder check is scheduled around 8:00 AM and is restored after reboot/app replacement.
-- Android 13+ notification permission is requested when needed.
-- General Expenses now appear as their own value in monthly and yearly Overview summaries.
-- General Expenses now have their own column in the January–December breakdown table.
-- Total/Actual Spending continues to include General Expenses plus actual Payday/Freelance payments.
-- Existing future-payday behavior, allowance logic, backup/import, receivables, and local SQLite data model are preserved.
-- App version bumped to 1.5.0 (versionCode 7).
+- Fixed General Expenses Cancel / Delete confirmation by enabling WebChromeClient dialogs.
+- General Expenses can be removed when a purchase is cancelled; the active cash movement is removed while the deleted record remains in History.
+- Added offline Android notifications for Payday dates.
+- Added offline Android notifications for unpaid Payday and Freelance bills / expenses due today.
+- Reminder checks run around 8:00 AM daily, when the app opens, after relevant records change, and are restored after reboot / app replacement.
+- Added Android 13+ notification permission handling.
+- Added General Expenses as a separate value in monthly Overview summaries.
+- Added General Expenses as a separate value in yearly Overview summaries.
+- Added a General Expenses column to the January–December yearly breakdown.
+- Actual Spending / Total Spending still includes General Expenses, so totals remain complete.
+- Existing future-payday exclusion, allowance, possible-money-left, database backup, Freelance, receivables, and History behavior preserved.
 
-Source-level checks:
-- JavaScript syntax parse
-- General Expenses monthly/yearly reporting
-- General Expenses delete flow
-- Reminder scheduling / receiver registration
-- Notification permission handling
-- Payday and unpaid-due-today filtering
+Source-level checks performed:
+- JavaScript source synchronized with browser preview: PASS
+- General Expense deletion return-state handling: PASS
+- General Expenses monthly/yearly statistics: PASS
+- General Expenses yearly breakdown column: PASS
+- Notification permission and manifest receivers: PASS
+- Payday notification source logic: PASS
+- Payday/Freelance due-date reminder source logic: PASS
+- WebView JavaScript confirmation support: PASS
 
 Final Android lint/compile is validated by GitHub Actions after merge.

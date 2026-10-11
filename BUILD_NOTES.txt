@@ -1,19 +1,26 @@
-Financial Monitoring Android 1.4.0
+Financial Monitoring Android 1.5.0
 
 Key changes:
-- Added General Expenses for purchases from accumulated available money.
-- General Expenses count as actual spending by their recorded transaction date.
-- Added local database Export Backup / Import Backup through Android's document picker.
-- Database upgraded to version 4 with backward migration from existing app data.
-- Added permanent signed APK workflow documentation.
-- Future Payday income remains excluded from Overview until the payday date arrives.
-- Existing Payday allowance, possible-money-left, payment reversal, Freelance, receivables, and History behavior preserved.
+- Fixed General Expenses Cancel / Delete confirmation by enabling WebChromeClient dialogs.
+- General Expenses can be removed when a purchase is cancelled; the active cash movement is removed while the deleted record remains in History.
+- Added offline Android notifications for Payday dates.
+- Added offline Android notifications for unpaid Payday and Freelance bills / expenses due today.
+- Reminder checks run around 8:00 AM daily, when the app opens, after relevant records change, and are restored after reboot / app replacement.
+- Added Android 13+ notification permission handling.
+- Added General Expenses as a separate value in monthly Overview summaries.
+- Added General Expenses as a separate value in yearly Overview summaries.
+- Added a General Expenses column to the January–December yearly breakdown.
+- Actual Spending / Total Spending still includes General Expenses, so totals remain complete.
+- Existing future-payday exclusion, allowance, possible-money-left, database backup, Freelance, receivables, and History behavior preserved.
 
 Source-level checks performed:
-- JavaScript syntax parse: PASS
-- General Expenses UI and overview spending integration: PASS
-- Android bridge method presence: PASS
-- Database v4 schema and snapshot integration: PASS
-- Backup/import flow source review: PASS
+- JavaScript source synchronized with browser preview: PASS
+- General Expense deletion return-state handling: PASS
+- General Expenses monthly/yearly statistics: PASS
+- General Expenses yearly breakdown column: PASS
+- Notification permission and manifest receivers: PASS
+- Payday notification source logic: PASS
+- Payday/Freelance due-date reminder source logic: PASS
+- WebView JavaScript confirmation support: PASS
 
 Final Android lint/compile is validated by GitHub Actions after merge.

@@ -228,18 +228,20 @@ function periodStats(monthKey) {
   const salary = sum(snapshot.paycards.filter(x => isPaydayReceived(x) && monthOf(x.paydayDate) === monthKey), x => x.netPay);
   const freelance = sum(snapshot.freelance.filter(x => monthOf(x.incomeDate) === monthKey), x => x.amountReceived);
   const repayment = movementTotal({ month: monthKey, kind: 'receivable_repayment' });
+  const generalExpenses = -movementTotal({ month: monthKey, kind: 'general_expense' });
   const spending = spendingTotal({ month: monthKey });
   const income = salary + freelance + repayment;
-  return { salary, freelance, repayment, spending, income, net: income - spending };
+  return { salary, freelance, repayment, generalExpenses, spending, income, net: income - spending };
 }
 
 function yearStats(year) {
   const salary = sum(snapshot.paycards.filter(x => isPaydayReceived(x) && yearOf(x.paydayDate) === Number(year)), x => x.netPay);
   const freelance = sum(snapshot.freelance.filter(x => yearOf(x.incomeDate) === Number(year)), x => x.amountReceived);
   const repayment = movementTotal({ year, kind: 'receivable_repayment' });
+  const generalExpenses = -movementTotal({ year, kind: 'general_expense' });
   const spending = spendingTotal({ year });
   const income = salary + freelance + repayment;
-  return { salary, freelance, repayment, spending, income, net: income - spending };
+  return { salary, freelance, repayment, generalExpenses, spending, income, net: income - spending };
 }
 
 function renderOverview() {
@@ -262,24 +264,26 @@ function renderOverview() {
     <section class="panel"><div class="section-head"><div><div class="eyebrow">DATA SAFETY</div><h2>Database Backup</h2><div class="muted small">Export a local database backup before major app updates. Import replaces the app's current local data with the selected backup.</div></div></div><div class="card-actions"><button class="button secondary" onclick="exportDatabaseBackup()">Export Backup</button><button class="button secondary" onclick="importDatabaseBackup()">Import Backup</button></div></section>
     <section class="panel"><div class="filter-row"><label class="field"><span>Month</span><input id="overviewMonth" type="month" value="${h(overviewMonth)}"></label><button class="button secondary" onclick="applyOverviewMonth()">View month</button><label class="field"><span>Year</span><input id="overviewYear" type="number" min="2000" max="2100" value="${overviewYear}"></label><button class="button secondary" onclick="applyOverviewYear()">View year</button></div></section>
     <div class="section-head"><div><div class="eyebrow">MONTHLY</div><h2>${h(monthLabel(overviewMonth))}</h2></div></div>
-    <section class="summary-grid six">
+    <section class="summary-grid">
       <article class="summary-card"><span>Salary received</span><strong>${money(m.salary)}</strong></article>
       <article class="summary-card"><span>Freelance received</span><strong>${money(m.freelance)}</strong></article>
       <article class="summary-card"><span>Repayments received</span><strong>${money(m.repayment)}</strong></article>
       <article class="summary-card"><span>Total cash in</span><strong>${money(m.income)}</strong></article>
-      <article class="summary-card"><span>Actual spending</span><strong>${money(m.spending)}</strong></article>
+      <article class="summary-card"><span>General Expenses</span><strong>${money(m.generalExpenses)}</strong><small>Accumulated-balance spending</small></article>
+      <article class="summary-card"><span>Actual spending</span><strong>${money(m.spending)}</strong><small>Includes General Expenses</small></article>
       <article class="summary-card"><span>Month net</span><strong class="${m.net < 0 ? 'negative' : 'positive'}">${money(m.net)}</strong></article>
     </section>
     <div class="section-head"><div><div class="eyebrow">YEARLY</div><h2>${overviewYear} Summary</h2></div></div>
-    <section class="summary-grid six">
+    <section class="summary-grid">
       <article class="summary-card"><span>Total salary</span><strong>${money(y.salary)}</strong></article>
       <article class="summary-card"><span>Total freelance</span><strong>${money(y.freelance)}</strong></article>
       <article class="summary-card"><span>Repayments</span><strong>${money(y.repayment)}</strong></article>
       <article class="summary-card"><span>Total cash in</span><strong>${money(y.income)}</strong></article>
-      <article class="summary-card"><span>Total spending</span><strong>${money(y.spending)}</strong></article>
+      <article class="summary-card"><span>General Expenses</span><strong>${money(y.generalExpenses)}</strong><small>Accumulated-balance spending</small></article>
+      <article class="summary-card"><span>Total spending</span><strong>${money(y.spending)}</strong><small>Includes General Expenses</small></article>
       <article class="summary-card"><span>Year net</span><strong class="${y.net < 0 ? 'negative' : 'positive'}">${money(y.net)}</strong></article>
     </section>
-    <section class="panel"><div class="section-head"><div><div class="eyebrow">MONTH BY MONTH</div><h2>${overviewYear} breakdown</h2></div></div><div class="table-scroll"><table class="table wide-table"><thead><tr><th>Month</th><th>Salary</th><th>Freelance</th><th>Repayments</th><th>Cash in</th><th>Spent</th><th>Net</th></tr></thead><tbody>${rows.map(r => `<tr><td><strong>${h(monthLabel(r.k).split(' ')[0])}</strong></td><td>${money(r.salary)}</td><td>${money(r.freelance)}</td><td>${money(r.repayment)}</td><td>${money(r.income)}</td><td>${money(r.spending)}</td><td class="${r.net < 0 ? 'negative' : 'positive'}">${money(r.net)}</td></tr>`).join('')}</tbody></table></div></section>`;
+    <section class="panel"><div class="section-head"><div><div class="eyebrow">MONTH BY MONTH</div><h2>${overviewYear} breakdown</h2></div></div><div class="table-scroll"><table class="table wide-table"><thead><tr><th>Month</th><th>Salary</th><th>Freelance</th><th>Repayments</th><th>Cash in</th><th>General Expenses</th><th>Total Spent</th><th>Net</th></tr></thead><tbody>${rows.map(r => `<tr><td><strong>${h(monthLabel(r.k).split(' ')[0])}</strong></td><td>${money(r.salary)}</td><td>${money(r.freelance)}</td><td>${money(r.repayment)}</td><td>${money(r.income)}</td><td>${money(r.generalExpenses)}</td><td>${money(r.spending)}</td><td class="${r.net < 0 ? 'negative' : 'positive'}">${money(r.net)}</td></tr>`).join('')}</tbody></table></div></section>`;
 }
 window.applyOverviewMonth = () => { overviewMonth = document.getElementById('overviewMonth').value || overviewMonth; renderOverview(); };
 window.applyOverviewYear = () => { overviewYear = Number(document.getElementById('overviewYear').value) || overviewYear; renderOverview(); };

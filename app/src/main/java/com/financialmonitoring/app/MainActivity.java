@@ -1,12 +1,16 @@
 package com.financialmonitoring.app;
 
 import android.annotation.SuppressLint;
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -23,6 +27,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private static final int REQUEST_EXPORT_DATABASE = 4101;
     private static final int REQUEST_IMPORT_DATABASE = 4102;
+    private static final int REQUEST_NOTIFICATIONS = 4103;
     private static final String DATABASE_NAME = "financial_monitoring.db";
 
     private WebView webView;
@@ -49,8 +54,36 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(true);
 
         webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient());
         webView.addJavascriptInterface(new FinanceBridge(this, database), "Android");
         webView.loadUrl("file:///android_asset/index.html");
+
+        NotificationScheduler.scheduleDaily(this);
+        ensureNotificationPermissionAndCheck();
+    }
+
+    private void ensureNotificationPermissionAndCheck() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
+            return;
+        }
+        NotificationScheduler.checkNow(this);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_NOTIFICATIONS &&
+                grantResults.length > 0 &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            NotificationScheduler.checkNow(this);
+        }
+    }
+
+    public void refreshFinanceReminders() {
+        NotificationScheduler.scheduleDaily(this);
+        NotificationScheduler.checkNow(this);
     }
 
     public void exportDatabaseBackup() {
